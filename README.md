@@ -6,16 +6,14 @@
 **Optional blueprint:** English
 
 Home Assistant blueprint for SunEnergyXT 500 / 500 Pro systems with an external
-power meter. The repository keeps the source history. Home Assistant should
-import the blueprint from the gist raw URLs below because they are reachable
-without GitHub login.
+power meter. Home Assistant can import the blueprint from the raw URLs below.
 
 ## Blueprint URLs
 
 | Language | Home Assistant import URL |
 | --- | --- |
-| Deutsch | `https://gist.githubusercontent.com/SunEnergyXT/38cab611ce8fe5b8040613299e8a3c6f/raw/sunenergyxt-500-zero-feed-in.yaml` |
-| English | `https://gist.githubusercontent.com/SunEnergyXT/103107bc8888bee374cb7f22d2397631/raw/sunenergyxt-500-zero-feed-in.en.yaml` |
+| Deutsch | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml` |
+| English | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.en.yaml` |
 
 ## Deutsch
 
@@ -55,13 +53,13 @@ In Home Assistant öffnen:
 Deutsche Standard-URL einfügen:
 
 ```text
-https://gist.githubusercontent.com/SunEnergyXT/38cab611ce8fe5b8040613299e8a3c6f/raw/sunenergyxt-500-zero-feed-in.yaml
+https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml
 ```
 
 Für englische Blueprint-Texte diese URL verwenden:
 
 ```text
-https://gist.githubusercontent.com/SunEnergyXT/103107bc8888bee374cb7f22d2397631/raw/sunenergyxt-500-zero-feed-in.en.yaml
+https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.en.yaml
 ```
 
 Lokale Installation ist ebenfalls möglich. Die YAML-Datei nach Home Assistant
@@ -166,13 +164,13 @@ Open Home Assistant:
 Use the German default URL:
 
 ```text
-https://gist.githubusercontent.com/SunEnergyXT/38cab611ce8fe5b8040613299e8a3c6f/raw/sunenergyxt-500-zero-feed-in.yaml
+https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml
 ```
 
 Use the English URL if you want English blueprint labels:
 
 ```text
-https://gist.githubusercontent.com/SunEnergyXT/103107bc8888bee374cb7f22d2397631/raw/sunenergyxt-500-zero-feed-in.en.yaml
+https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.en.yaml
 ```
 
 Local installation is also supported. Copy the YAML file to:

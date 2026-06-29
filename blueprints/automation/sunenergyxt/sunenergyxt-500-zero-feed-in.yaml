@@ -12,7 +12,7 @@ blueprint:
   domain: automation
   homeassistant:
     min_version: "2024.6.0"
-  source_url: https://gist.githubusercontent.com/SunEnergyXT/38cab611ce8fe5b8040613299e8a3c6f/raw/sunenergyxt-500-zero-feed-in.yaml
+  source_url: https://github.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/blob/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml
   input:
     required_devices:
       name: SunEnergyXT-Einrichtung
