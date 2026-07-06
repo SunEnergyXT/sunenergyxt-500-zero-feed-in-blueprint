@@ -869,7 +869,7 @@ variables:
       {% for entity in device_entities(aio_device) if ns.entity == '' and entity.startswith('sensor.') %}
         {% set name = (state_attr(entity, 'friendly_name') or entity) | lower %}
         {% set eid = entity | lower %}
-        {% if eid.endswith('_pv') or 'pv total input power' in name or 'pv总输入功率' in name or 'pv-gesamteingangsleistung' in name %}
+        {% if eid.endswith('_pv') or 'pv total input power' in name or 'pv总输入功率' in name or 'pv-gesamteingangsleistung' in name or ('pv' in name and 'gesamtleistung' in name) %}
           {% set ns.entity = entity %}
         {% endif %}
       {% endfor %}
@@ -899,11 +899,13 @@ variables:
       {% for entity in device_entities(aio_device) if ns.entity == '' and entity.startswith('number.') %}
         {% set name = (state_attr(entity, 'friendly_name') or entity) | lower %}
         {% set eid = entity | lower %}
-        {% set is_load_port = 'load port' in name or 'load_port' in eid or '负载口' in name %}
+        {% set is_load_port = 'load port' in name or 'load_port' in eid or '负载口' in name or 'lastanschluss' in name %}
         {% set is_min_soc = 'min_discharge_soc' in eid
+             or eid.endswith('_si')
              or 'system min discharge soc' in name
              or 'min discharge soc' in name
              or ('minimum' in name and 'discharge' in name and 'soc' in name)
+             or ('system' in name and 'entladegrenze' in name)
              or ('放电' in name and ('下限' in name or '最低' in name)) %}
         {% if is_min_soc and not is_load_port %}
           {% set ns.entity = entity %}
@@ -921,9 +923,11 @@ variables:
         {% set name = (state_attr(entity, 'friendly_name') or entity) | lower %}
         {% set eid = entity | lower %}
         {% set is_max_soc = 'max_charge_soc' in eid
+             or eid.endswith('_sa')
              or 'system max charge soc' in name
              or 'max charge soc' in name
              or ('maximum' in name and 'charge' in name and 'soc' in name)
+             or ('system' in name and 'ladegrenze' in name and 'entladegrenze' not in name)
              or ('充电' in name and ('上限' in name or '最高' in name)) %}
         {% if is_max_soc %}
           {% set ns.entity = entity %}
