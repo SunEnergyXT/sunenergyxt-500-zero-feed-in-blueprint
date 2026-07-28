@@ -1236,19 +1236,19 @@ condition:
       ] %}
       {% if source in signed_sources %}
         {{ meter_entity | string | length > 0
-           and (as_timestamp(now()) - as_timestamp(states[meter_entity | trim].last_updated, 0)) <= limit }}
+           and (as_timestamp(now()) - as_timestamp(states[meter_entity | trim].last_reported | default(states[meter_entity | trim].last_updated), 0)) <= limit }}
       {% elif source in phase_sources %}
         {{ meter_l1_entity | string | length > 0
            and meter_l2_entity | string | length > 0
            and meter_l3_entity | string | length > 0
-           and ((as_timestamp(now()) - as_timestamp(states[meter_l1_entity | trim].last_updated, 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l2_entity | trim].last_updated, 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l3_entity | trim].last_updated, 0)) <= limit) }}
+           and ((as_timestamp(now()) - as_timestamp(states[meter_l1_entity | trim].last_reported | default(states[meter_l1_entity | trim].last_updated), 0)) <= limit
+                or (as_timestamp(now()) - as_timestamp(states[meter_l2_entity | trim].last_reported | default(states[meter_l2_entity | trim].last_updated), 0)) <= limit
+                or (as_timestamp(now()) - as_timestamp(states[meter_l3_entity | trim].last_reported | default(states[meter_l3_entity | trim].last_updated), 0)) <= limit) }}
       {% elif source == 'import_export_pair' %}
         {{ meter_import_entity | string | length > 0
            and meter_export_entity | string | length > 0
-           and (as_timestamp(now()) - as_timestamp(states[meter_import_entity | trim].last_updated, 0)) <= limit
-           and (as_timestamp(now()) - as_timestamp(states[meter_export_entity | trim].last_updated, 0)) <= limit }}
+           and (as_timestamp(now()) - as_timestamp(states[meter_import_entity | trim].last_reported | default(states[meter_import_entity | trim].last_updated), 0)) <= limit
+           and (as_timestamp(now()) - as_timestamp(states[meter_export_entity | trim].last_reported | default(states[meter_export_entity | trim].last_updated), 0)) <= limit }}
       {% elif source in phase_pair_sources %}
         {{ meter_l1_import_entity | string | length > 0
            and meter_l2_import_entity | string | length > 0
@@ -1256,30 +1256,30 @@ condition:
            and meter_l1_export_entity | string | length > 0
            and meter_l2_export_entity | string | length > 0
            and meter_l3_export_entity | string | length > 0
-           and ((as_timestamp(now()) - as_timestamp(states[meter_l1_import_entity | trim].last_updated, 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l2_import_entity | trim].last_updated, 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l3_import_entity | trim].last_updated, 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l1_export_entity | trim].last_updated, 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l2_export_entity | trim].last_updated, 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l3_export_entity | trim].last_updated, 0)) <= limit) }}
+           and ((as_timestamp(now()) - as_timestamp(states[meter_l1_import_entity | trim].last_reported | default(states[meter_l1_import_entity | trim].last_updated), 0)) <= limit
+                or (as_timestamp(now()) - as_timestamp(states[meter_l2_import_entity | trim].last_reported | default(states[meter_l2_import_entity | trim].last_updated), 0)) <= limit
+                or (as_timestamp(now()) - as_timestamp(states[meter_l3_import_entity | trim].last_reported | default(states[meter_l3_import_entity | trim].last_updated), 0)) <= limit
+                or (as_timestamp(now()) - as_timestamp(states[meter_l1_export_entity | trim].last_reported | default(states[meter_l1_export_entity | trim].last_updated), 0)) <= limit
+                or (as_timestamp(now()) - as_timestamp(states[meter_l2_export_entity | trim].last_reported | default(states[meter_l2_export_entity | trim].last_updated), 0)) <= limit
+                or (as_timestamp(now()) - as_timestamp(states[meter_l3_export_entity | trim].last_reported | default(states[meter_l3_export_entity | trim].last_updated), 0)) <= limit) }}
       {% else %}
         {{ false }}
       {% endif %}
   - condition: template
     value_template: >-
-      {% set age = as_timestamp(now()) - as_timestamp(states[load_entity | trim].last_updated, 0) %}
+      {% set age = as_timestamp(now()) - as_timestamp(states[load_entity | trim].last_reported | default(states[load_entity | trim].last_updated), 0) %}
       {{ age <= (max_meter_age_s | float(30)) }}
   - condition: template
     value_template: >-
-      {% set age = as_timestamp(now()) - as_timestamp(states[gp_entity | trim].last_updated, 0) %}
+      {% set age = as_timestamp(now()) - as_timestamp(states[gp_entity | trim].last_reported | default(states[gp_entity | trim].last_updated), 0) %}
       {{ age <= (max_meter_age_s | float(30)) }}
   - condition: template
     value_template: >-
-      {% set age = as_timestamp(now()) - as_timestamp(states[pv_entity | trim].last_updated, 0) %}
+      {% set age = as_timestamp(now()) - as_timestamp(states[pv_entity | trim].last_reported | default(states[pv_entity | trim].last_updated), 0) %}
       {{ age <= (max_meter_age_s | float(30)) }}
   - condition: template
     value_template: >-
-      {% set age = as_timestamp(now()) - as_timestamp(states[soc_entity | trim].last_updated, 0) %}
+      {% set age = as_timestamp(now()) - as_timestamp(states[soc_entity | trim].last_reported | default(states[soc_entity | trim].last_updated), 0) %}
       {{ age <= (max_meter_age_s | float(30)) }}
 
 action:
@@ -1332,21 +1332,21 @@ action:
       meter_control_sample_ts: >-
         {% set source = effective_meter_power_source | trim %}
         {% if source in meter_signed_total_sources or source == 'ecotracker_attribute_power' %}
-          {{ as_timestamp(states[meter_entity | trim].last_updated, 0) }}
+          {{ as_timestamp(states[meter_entity | trim].last_reported | default(states[meter_entity | trim].last_updated), 0) }}
         {% elif source in meter_phase_sum_sources %}
-          {{ [as_timestamp(states[meter_l1_entity | trim].last_updated, 0),
-              as_timestamp(states[meter_l2_entity | trim].last_updated, 0),
-              as_timestamp(states[meter_l3_entity | trim].last_updated, 0)] | max }}
+          {{ [as_timestamp(states[meter_l1_entity | trim].last_reported | default(states[meter_l1_entity | trim].last_updated), 0),
+              as_timestamp(states[meter_l2_entity | trim].last_reported | default(states[meter_l2_entity | trim].last_updated), 0),
+              as_timestamp(states[meter_l3_entity | trim].last_reported | default(states[meter_l3_entity | trim].last_updated), 0)] | max }}
         {% elif source == 'import_export_pair' %}
-          {{ [as_timestamp(states[meter_import_entity | trim].last_updated, 0),
-              as_timestamp(states[meter_export_entity | trim].last_updated, 0)] | max }}
+          {{ [as_timestamp(states[meter_import_entity | trim].last_reported | default(states[meter_import_entity | trim].last_updated), 0),
+              as_timestamp(states[meter_export_entity | trim].last_reported | default(states[meter_export_entity | trim].last_updated), 0)] | max }}
         {% elif source in meter_phase_pair_sources %}
-          {{ [as_timestamp(states[meter_l1_import_entity | trim].last_updated, 0),
-              as_timestamp(states[meter_l2_import_entity | trim].last_updated, 0),
-              as_timestamp(states[meter_l3_import_entity | trim].last_updated, 0),
-              as_timestamp(states[meter_l1_export_entity | trim].last_updated, 0),
-              as_timestamp(states[meter_l2_export_entity | trim].last_updated, 0),
-              as_timestamp(states[meter_l3_export_entity | trim].last_updated, 0)] | max }}
+          {{ [as_timestamp(states[meter_l1_import_entity | trim].last_reported | default(states[meter_l1_import_entity | trim].last_updated), 0),
+              as_timestamp(states[meter_l2_import_entity | trim].last_reported | default(states[meter_l2_import_entity | trim].last_updated), 0),
+              as_timestamp(states[meter_l3_import_entity | trim].last_reported | default(states[meter_l3_import_entity | trim].last_updated), 0),
+              as_timestamp(states[meter_l1_export_entity | trim].last_reported | default(states[meter_l1_export_entity | trim].last_updated), 0),
+              as_timestamp(states[meter_l2_export_entity | trim].last_reported | default(states[meter_l2_export_entity | trim].last_updated), 0),
+              as_timestamp(states[meter_l3_export_entity | trim].last_reported | default(states[meter_l3_export_entity | trim].last_updated), 0)] | max }}
         {% else %}
           {{ 0 }}
         {% endif %}
@@ -1739,7 +1739,7 @@ action:
       seconds_since_control_change: >-
         {{ as_timestamp(now()) - (control_last_change_ts | float(0)) }}
       control_gp_sample_after_change: >-
-        {{ as_timestamp(states[gp_entity | trim].last_updated, 0) > (control_last_change_ts | float(0)) }}
+        {{ as_timestamp(states[gp_entity | trim].last_reported | default(states[gp_entity | trim].last_updated), 0) > (control_last_change_ts | float(0)) }}
       control_meter_sample_after_change: >-
         {{ (meter_control_sample_ts | float(0)) > (control_last_change_ts | float(0)) }}
       control_feedback_interval_s: >-
