@@ -481,6 +481,17 @@ blueprint:
               unit_of_measurement: W
               mode: box
 
+        target_grid_power_entity:
+          name: Optional target grid power helper
+          description: >
+            Optional input_number helper for a dynamic target value. If no
+            helper is selected or its state is invalid, the static target grid
+            power configured above is used.
+          default: ""
+          selector:
+            entity:
+              domain: input_number
+
         gs_min_w:
           name: System Grid Port Power Setpoint lower limit
           description: >
@@ -768,7 +779,17 @@ variables:
   full_hold_entity: !input full_charge_hold_helper
   low_hold_entity: !input low_discharge_hold_helper
   full_battery_mode: !input full_battery_mode
-  target_grid_power_w: !input target_grid_power_w
+  target_grid_power_static_w: !input target_grid_power_w
+  target_grid_power_entity: !input target_grid_power_entity
+  target_grid_power_w: >-
+    {% set entity = target_grid_power_entity | string | trim %}
+    {% set fallback = target_grid_power_static_w | float(0) %}
+    {% set invalid = ['unknown', 'unavailable', 'none', ''] %}
+    {% if entity and states(entity) not in invalid %}
+      {{ states(entity) | float(fallback) }}
+    {% else %}
+      {{ fallback }}
+    {% endif %}
   gs_min_w: !input gs_min_w
   gs_max_w: !input gs_max_w
   gs_resolution_w: !input gs_resolution_w

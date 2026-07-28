@@ -489,6 +489,17 @@ blueprint:
               unit_of_measurement: W
               mode: box
 
+        target_grid_power_entity:
+          name: Optionaler Helper für Ziel-Netzleistung
+          description: >
+            Optionaler input_number-Helper für einen dynamischen Zielwert. Ist
+            kein Helper ausgewählt oder sein Zustand ungültig, wird die oben
+            eingestellte Ziel-Netzleistung verwendet.
+          default: ""
+          selector:
+            entity:
+              domain: input_number
+
         gs_min_w:
           name: Untere Grenze für Sollwert Leistung Netzanschluss
           description: >
@@ -779,7 +790,17 @@ variables:
   full_hold_entity: !input full_charge_hold_helper
   low_hold_entity: !input low_discharge_hold_helper
   full_battery_mode: !input full_battery_mode
-  target_grid_power_w: !input target_grid_power_w
+  target_grid_power_static_w: !input target_grid_power_w
+  target_grid_power_entity: !input target_grid_power_entity
+  target_grid_power_w: >-
+    {% set entity = target_grid_power_entity | string | trim %}
+    {% set fallback = target_grid_power_static_w | float(0) %}
+    {% set invalid = ['unknown', 'unavailable', 'none', ''] %}
+    {% if entity and states(entity) not in invalid %}
+      {{ states(entity) | float(fallback) }}
+    {% else %}
+      {{ fallback }}
+    {% endif %}
   gs_min_w: !input gs_min_w
   gs_max_w: !input gs_max_w
   gs_resolution_w: !input gs_resolution_w
