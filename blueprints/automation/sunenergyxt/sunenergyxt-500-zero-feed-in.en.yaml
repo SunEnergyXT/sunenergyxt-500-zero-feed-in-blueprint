@@ -1153,142 +1153,291 @@ variables:
       {% endfor %}
       {{ ns.entity | trim }}
     {% endif %}
-condition:
-  - condition: template
-    value_template: >-
-      {% set source = effective_meter_power_source | trim %}
-      {% set bad = ['unknown', 'unavailable', 'none', ''] %}
-      {% set signed_sources = [
-        'shelly_total_power',
-        'bitshake_tasmota_power',
-        'ecotracker_power',
-        'custom_signed_total_power'
-      ] %}
-      {% set phase_sources = [
-        'shelly_three_phase_sum',
-        'custom_three_phase_sum'
-      ] %}
-      {% set phase_pair_sources = [
-        'shelly_three_phase_import_export',
-        'custom_three_phase_import_export'
-      ] %}
-      {% if source in signed_sources %}
-        {{ meter_entity | string | length > 0 and states(meter_entity | trim) not in bad }}
-      {% elif source == 'ecotracker_attribute_power' %}
-        {{ meter_entity | string | length > 0
-           and states(meter_entity | trim) not in bad
-           and state_attr(meter_entity | trim, meter_power_attribute) is not none }}
-      {% elif source in phase_sources %}
-        {{ meter_l1_entity | string | length > 0 and states(meter_l1_entity | trim) not in bad
-           and meter_l2_entity | string | length > 0 and states(meter_l2_entity | trim) not in bad
-           and meter_l3_entity | string | length > 0 and states(meter_l3_entity | trim) not in bad }}
-      {% elif source == 'import_export_pair' %}
-        {{ meter_import_entity | string | length > 0 and states(meter_import_entity | trim) not in bad
-           and meter_export_entity | string | length > 0 and states(meter_export_entity | trim) not in bad }}
-      {% elif source in phase_pair_sources %}
-        {{ meter_l1_import_entity | string | length > 0 and states(meter_l1_import_entity | trim) not in bad
-           and meter_l2_import_entity | string | length > 0 and states(meter_l2_import_entity | trim) not in bad
-           and meter_l3_import_entity | string | length > 0 and states(meter_l3_import_entity | trim) not in bad
-           and meter_l1_export_entity | string | length > 0 and states(meter_l1_export_entity | trim) not in bad
-           and meter_l2_export_entity | string | length > 0 and states(meter_l2_export_entity | trim) not in bad
-           and meter_l3_export_entity | string | length > 0 and states(meter_l3_export_entity | trim) not in bad }}
-      {% else %}
-        {{ false }}
-      {% endif %}
-  - condition: template
-    value_template: >-
-      {{ states(gs_entity | trim) not in ['unknown', 'unavailable', 'none', ''] }}
-  - condition: template
-    value_template: >-
-      {{ states(is_entity | trim) not in ['unknown', 'unavailable', 'none', ''] }}
-  - condition: template
-    value_template: >-
-      {{ states(load_entity | trim) not in ['unknown', 'unavailable', 'none', ''] }}
-  - condition: template
-    value_template: >-
-      {{ states(gp_entity | trim) not in ['unknown', 'unavailable', 'none', ''] }}
-  - condition: template
-    value_template: >-
-      {{ states(pv_entity | trim) not in ['unknown', 'unavailable', 'none', ''] }}
-  - condition: template
-    value_template: >-
-      {{ states(soc_entity | trim) not in ['unknown', 'unavailable', 'none', ''] }}
-  - condition: template
-    value_template: >-
-      {{ min_soc_entity | string | length > 0
-         and states(min_soc_entity | trim) not in ['unknown', 'unavailable', 'none', ''] }}
-  - condition: template
-    value_template: >-
-      {{ max_soc_entity | string | length > 0
-         and states(max_soc_entity | trim) not in ['unknown', 'unavailable', 'none', ''] }}
-  - condition: template
-    value_template: >-
-      {% set source = effective_meter_power_source | trim %}
-      {% set limit = max_meter_age_s | float(30) %}
-      {% set signed_sources = [
-        'shelly_total_power',
-        'bitshake_tasmota_power',
-        'ecotracker_power',
-        'ecotracker_attribute_power',
-        'custom_signed_total_power'
-      ] %}
-      {% set phase_sources = [
-        'shelly_three_phase_sum',
-        'custom_three_phase_sum'
-      ] %}
-      {% set phase_pair_sources = [
-        'shelly_three_phase_import_export',
-        'custom_three_phase_import_export'
-      ] %}
-      {% if source in signed_sources %}
-        {{ meter_entity | string | length > 0
-           and (as_timestamp(now()) - as_timestamp(states[meter_entity | trim].last_reported | default(states[meter_entity | trim].last_updated), 0)) <= limit }}
-      {% elif source in phase_sources %}
-        {{ meter_l1_entity | string | length > 0
-           and meter_l2_entity | string | length > 0
-           and meter_l3_entity | string | length > 0
-           and ((as_timestamp(now()) - as_timestamp(states[meter_l1_entity | trim].last_reported | default(states[meter_l1_entity | trim].last_updated), 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l2_entity | trim].last_reported | default(states[meter_l2_entity | trim].last_updated), 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l3_entity | trim].last_reported | default(states[meter_l3_entity | trim].last_updated), 0)) <= limit) }}
-      {% elif source == 'import_export_pair' %}
-        {{ meter_import_entity | string | length > 0
-           and meter_export_entity | string | length > 0
-           and (as_timestamp(now()) - as_timestamp(states[meter_import_entity | trim].last_reported | default(states[meter_import_entity | trim].last_updated), 0)) <= limit
-           and (as_timestamp(now()) - as_timestamp(states[meter_export_entity | trim].last_reported | default(states[meter_export_entity | trim].last_updated), 0)) <= limit }}
-      {% elif source in phase_pair_sources %}
-        {{ meter_l1_import_entity | string | length > 0
-           and meter_l2_import_entity | string | length > 0
-           and meter_l3_import_entity | string | length > 0
-           and meter_l1_export_entity | string | length > 0
-           and meter_l2_export_entity | string | length > 0
-           and meter_l3_export_entity | string | length > 0
-           and ((as_timestamp(now()) - as_timestamp(states[meter_l1_import_entity | trim].last_reported | default(states[meter_l1_import_entity | trim].last_updated), 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l2_import_entity | trim].last_reported | default(states[meter_l2_import_entity | trim].last_updated), 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l3_import_entity | trim].last_reported | default(states[meter_l3_import_entity | trim].last_updated), 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l1_export_entity | trim].last_reported | default(states[meter_l1_export_entity | trim].last_updated), 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l2_export_entity | trim].last_reported | default(states[meter_l2_export_entity | trim].last_updated), 0)) <= limit
-                or (as_timestamp(now()) - as_timestamp(states[meter_l3_export_entity | trim].last_reported | default(states[meter_l3_export_entity | trim].last_updated), 0)) <= limit) }}
-      {% else %}
-        {{ false }}
-      {% endif %}
-  - condition: template
-    value_template: >-
-      {% set age = as_timestamp(now()) - as_timestamp(states[load_entity | trim].last_reported | default(states[load_entity | trim].last_updated), 0) %}
-      {{ age <= (max_meter_age_s | float(30)) }}
-  - condition: template
-    value_template: >-
-      {% set age = as_timestamp(now()) - as_timestamp(states[gp_entity | trim].last_reported | default(states[gp_entity | trim].last_updated), 0) %}
-      {{ age <= (max_meter_age_s | float(30)) }}
-  - condition: template
-    value_template: >-
-      {% set age = as_timestamp(now()) - as_timestamp(states[pv_entity | trim].last_reported | default(states[pv_entity | trim].last_updated), 0) %}
-      {{ age <= (max_meter_age_s | float(30)) }}
-  - condition: template
-    value_template: >-
-      {% set age = as_timestamp(now()) - as_timestamp(states[soc_entity | trim].last_reported | default(states[soc_entity | trim].last_updated), 0) %}
-      {{ age <= (max_meter_age_s | float(30)) }}
+condition: []
 
 action:
+  # Validate all critical inputs before calculating or writing control targets.
+  - variables:
+      failsafe_bad_states:
+        - unknown
+        - unavailable
+        - none
+        - ""
+      failsafe_signed_sources:
+        - shelly_total_power
+        - bitshake_tasmota_power
+        - ecotracker_power
+        - custom_signed_total_power
+      failsafe_phase_sources:
+        - shelly_three_phase_sum
+        - custom_three_phase_sum
+      failsafe_phase_pair_sources:
+        - shelly_three_phase_import_export
+        - custom_three_phase_import_export
+      failsafe_limit_s: "{{ max_meter_age_s | float(30) }}"
+      failsafe_gs_valid: >-
+        {% set entity = gs_entity | string | trim %}
+        {% set value = states(entity) %}
+        {{ entity.startswith('number.')
+           and value not in failsafe_bad_states
+           and is_number(value) }}
+      failsafe_is_valid: >-
+        {% set entity = is_entity | string | trim %}
+        {% set value = states(entity) %}
+        {{ entity.startswith('number.')
+           and value not in failsafe_bad_states
+           and is_number(value) }}
+      failsafe_load_valid: >-
+        {% set value = states(load_entity | trim) %}
+        {{ load_entity | string | trim | length > 0
+           and value not in failsafe_bad_states
+           and is_number(value) }}
+      failsafe_gp_valid: >-
+        {% set value = states(gp_entity | trim) %}
+        {{ gp_entity | string | trim | length > 0
+           and value not in failsafe_bad_states
+           and is_number(value) }}
+      failsafe_pv_valid: >-
+        {% set value = states(pv_entity | trim) %}
+        {{ pv_entity | string | trim | length > 0
+           and value not in failsafe_bad_states
+           and is_number(value) }}
+      failsafe_soc_valid: >-
+        {% set value = states(soc_entity | trim) %}
+        {{ soc_entity | string | trim | length > 0
+           and value not in failsafe_bad_states
+           and is_number(value) }}
+      failsafe_min_soc_valid: >-
+        {% set value = states(min_soc_entity | trim) %}
+        {{ min_soc_entity | string | trim | length > 0
+           and value not in failsafe_bad_states
+           and is_number(value) }}
+      failsafe_max_soc_valid: >-
+        {% set value = states(max_soc_entity | trim) %}
+        {{ max_soc_entity | string | trim | length > 0
+           and value not in failsafe_bad_states
+           and is_number(value) }}
+      failsafe_meter_valid: >-
+        {% set source = effective_meter_power_source | trim %}
+        {% set bad = failsafe_bad_states %}
+        {% if source in failsafe_signed_sources %}
+          {% set value = states(meter_entity | trim) %}
+          {{ meter_entity | string | trim | length > 0
+             and value not in bad
+             and is_number(value) }}
+        {% elif source == 'ecotracker_attribute_power' %}
+          {% set value = states(meter_entity | trim) %}
+          {% set power = state_attr(meter_entity | trim, meter_power_attribute) %}
+          {{ meter_entity | string | trim | length > 0
+             and value not in bad
+             and power is not none
+             and is_number(power) }}
+        {% elif source in failsafe_phase_sources %}
+          {{ meter_l1_entity | string | trim | length > 0
+             and meter_l2_entity | string | trim | length > 0
+             and meter_l3_entity | string | trim | length > 0
+             and states(meter_l1_entity | trim) not in bad
+             and states(meter_l2_entity | trim) not in bad
+             and states(meter_l3_entity | trim) not in bad
+             and is_number(states(meter_l1_entity | trim))
+             and is_number(states(meter_l2_entity | trim))
+             and is_number(states(meter_l3_entity | trim)) }}
+        {% elif source == 'import_export_pair' %}
+          {{ meter_import_entity | string | trim | length > 0
+             and meter_export_entity | string | trim | length > 0
+             and states(meter_import_entity | trim) not in bad
+             and states(meter_export_entity | trim) not in bad
+             and is_number(states(meter_import_entity | trim))
+             and is_number(states(meter_export_entity | trim)) }}
+        {% elif source in failsafe_phase_pair_sources %}
+          {{ meter_l1_import_entity | string | trim | length > 0
+             and meter_l2_import_entity | string | trim | length > 0
+             and meter_l3_import_entity | string | trim | length > 0
+             and meter_l1_export_entity | string | trim | length > 0
+             and meter_l2_export_entity | string | trim | length > 0
+             and meter_l3_export_entity | string | trim | length > 0
+             and states(meter_l1_import_entity | trim) not in bad
+             and states(meter_l2_import_entity | trim) not in bad
+             and states(meter_l3_import_entity | trim) not in bad
+             and states(meter_l1_export_entity | trim) not in bad
+             and states(meter_l2_export_entity | trim) not in bad
+             and states(meter_l3_export_entity | trim) not in bad
+             and is_number(states(meter_l1_import_entity | trim))
+             and is_number(states(meter_l2_import_entity | trim))
+             and is_number(states(meter_l3_import_entity | trim))
+             and is_number(states(meter_l1_export_entity | trim))
+             and is_number(states(meter_l2_export_entity | trim))
+             and is_number(states(meter_l3_export_entity | trim)) }}
+        {% else %}
+          {{ false }}
+        {% endif %}
+      failsafe_meter_fresh: >-
+        {% set source = effective_meter_power_source | trim %}
+        {% set limit = failsafe_limit_s | float(30) %}
+        {% if not (failsafe_meter_valid | bool(false)) %}
+          {{ false }}
+        {% elif source in failsafe_signed_sources or source == 'ecotracker_attribute_power' %}
+          {% set age = as_timestamp(now()) -
+             as_timestamp(states[meter_entity | trim].last_reported
+             | default(states[meter_entity | trim].last_updated), 0) %}
+          {{ age >= 0 and age <= limit }}
+        {% elif source in failsafe_phase_sources %}
+          {% set age_l1 = as_timestamp(now()) - as_timestamp(states[meter_l1_entity | trim].last_reported | default(states[meter_l1_entity | trim].last_updated), 0) %}
+          {% set age_l2 = as_timestamp(now()) - as_timestamp(states[meter_l2_entity | trim].last_reported | default(states[meter_l2_entity | trim].last_updated), 0) %}
+          {% set age_l3 = as_timestamp(now()) - as_timestamp(states[meter_l3_entity | trim].last_reported | default(states[meter_l3_entity | trim].last_updated), 0) %}
+          {{ (age_l1 >= 0 and age_l1 <= limit)
+             or (age_l2 >= 0 and age_l2 <= limit)
+             or (age_l3 >= 0 and age_l3 <= limit) }}
+        {% elif source == 'import_export_pair' %}
+          {% set import_age = as_timestamp(now()) - as_timestamp(states[meter_import_entity | trim].last_reported | default(states[meter_import_entity | trim].last_updated), 0) %}
+          {% set export_age = as_timestamp(now()) - as_timestamp(states[meter_export_entity | trim].last_reported | default(states[meter_export_entity | trim].last_updated), 0) %}
+          {{ import_age >= 0 and import_age <= limit
+             and export_age >= 0 and export_age <= limit }}
+        {% elif source in failsafe_phase_pair_sources %}
+          {% set ages = [
+            as_timestamp(now()) - as_timestamp(states[meter_l1_import_entity | trim].last_reported | default(states[meter_l1_import_entity | trim].last_updated), 0),
+            as_timestamp(now()) - as_timestamp(states[meter_l2_import_entity | trim].last_reported | default(states[meter_l2_import_entity | trim].last_updated), 0),
+            as_timestamp(now()) - as_timestamp(states[meter_l3_import_entity | trim].last_reported | default(states[meter_l3_import_entity | trim].last_updated), 0),
+            as_timestamp(now()) - as_timestamp(states[meter_l1_export_entity | trim].last_reported | default(states[meter_l1_export_entity | trim].last_updated), 0),
+            as_timestamp(now()) - as_timestamp(states[meter_l2_export_entity | trim].last_reported | default(states[meter_l2_export_entity | trim].last_updated), 0),
+            as_timestamp(now()) - as_timestamp(states[meter_l3_export_entity | trim].last_reported | default(states[meter_l3_export_entity | trim].last_updated), 0)
+          ] %}
+          {{ ages | select('ge', 0) | select('le', limit) | list | count > 0 }}
+        {% else %}
+          {{ false }}
+        {% endif %}
+      failsafe_load_fresh: >-
+        {% if failsafe_load_valid | bool(false) %}
+          {% set age = as_timestamp(now()) -
+             as_timestamp(states[load_entity | trim].last_reported
+             | default(states[load_entity | trim].last_updated), 0) %}
+          {{ age >= 0 and age <= (failsafe_limit_s | float(30)) }}
+        {% else %}
+          {{ false }}
+        {% endif %}
+      failsafe_gp_fresh: >-
+        {% if failsafe_gp_valid | bool(false) %}
+          {% set age = as_timestamp(now()) -
+             as_timestamp(states[gp_entity | trim].last_reported
+             | default(states[gp_entity | trim].last_updated), 0) %}
+          {{ age >= 0 and age <= (failsafe_limit_s | float(30)) }}
+        {% else %}
+          {{ false }}
+        {% endif %}
+      failsafe_pv_fresh: >-
+        {% if failsafe_pv_valid | bool(false) %}
+          {% set age = as_timestamp(now()) -
+             as_timestamp(states[pv_entity | trim].last_reported
+             | default(states[pv_entity | trim].last_updated), 0) %}
+          {{ age >= 0 and age <= (failsafe_limit_s | float(30)) }}
+        {% else %}
+          {{ false }}
+        {% endif %}
+      failsafe_pv_night_zero: >-
+        {{ failsafe_pv_valid | bool(false)
+           and is_state('sun.sun', 'below_horizon')
+           and (states(pv_entity | trim) | float(0) | abs) <= 5 }}
+      failsafe_pv_ok: >-
+        {{ failsafe_pv_valid | bool(false)
+           and ((failsafe_pv_fresh | bool(false))
+                or (failsafe_pv_night_zero | bool(false))) }}
+      failsafe_soc_fresh: >-
+        {% if failsafe_soc_valid | bool(false) %}
+          {% set age = as_timestamp(now()) -
+             as_timestamp(states[soc_entity | trim].last_reported
+             | default(states[soc_entity | trim].last_updated), 0) %}
+          {{ age >= 0 and age <= (failsafe_limit_s | float(30)) }}
+        {% else %}
+          {{ false }}
+        {% endif %}
+
+  - variables:
+      failsafe_inputs_ok: >-
+        {{ failsafe_gs_valid | bool(false)
+           and failsafe_is_valid | bool(false)
+           and failsafe_meter_valid | bool(false)
+           and failsafe_meter_fresh | bool(false)
+           and failsafe_gp_valid | bool(false)
+           and failsafe_gp_fresh | bool(false)
+           and failsafe_load_valid | bool(false)
+           and failsafe_load_fresh | bool(false)
+           and failsafe_pv_ok | bool(false)
+           and failsafe_soc_valid | bool(false)
+           and failsafe_soc_fresh | bool(false)
+           and failsafe_min_soc_valid | bool(false)
+           and failsafe_max_soc_valid | bool(false) }}
+      failsafe_reason: >-
+        {% set ns = namespace(parts=[]) %}
+        {% if not (failsafe_gs_valid | bool(false)) %}{% set ns.parts = ns.parts + ['GS invalid'] %}{% endif %}
+        {% if not (failsafe_is_valid | bool(false)) %}{% set ns.parts = ns.parts + ['IS invalid'] %}{% endif %}
+        {% if not (failsafe_meter_valid | bool(false)) %}
+          {% set ns.parts = ns.parts + ['grid meter invalid'] %}
+        {% elif not (failsafe_meter_fresh | bool(false)) %}
+          {% set ns.parts = ns.parts + ['grid meter stale'] %}
+        {% endif %}
+        {% if not (failsafe_gp_valid | bool(false)) %}
+          {% set ns.parts = ns.parts + ['grid port invalid'] %}
+        {% elif not (failsafe_gp_fresh | bool(false)) %}
+          {% set ns.parts = ns.parts + ['grid port stale'] %}
+        {% endif %}
+        {% if not (failsafe_load_valid | bool(false)) %}
+          {% set ns.parts = ns.parts + ['load port invalid'] %}
+        {% elif not (failsafe_load_fresh | bool(false)) %}
+          {% set ns.parts = ns.parts + ['load port stale'] %}
+        {% endif %}
+        {% if not (failsafe_pv_valid | bool(false)) %}
+          {% set ns.parts = ns.parts + ['PV invalid'] %}
+        {% elif not (failsafe_pv_ok | bool(false)) %}
+          {% set ns.parts = ns.parts + ['PV stale'] %}
+        {% endif %}
+        {% if not (failsafe_soc_valid | bool(false)) %}
+          {% set ns.parts = ns.parts + ['SOC invalid'] %}
+        {% elif not (failsafe_soc_fresh | bool(false)) %}
+          {% set ns.parts = ns.parts + ['SOC stale'] %}
+        {% endif %}
+        {% if not (failsafe_min_soc_valid | bool(false)) %}{% set ns.parts = ns.parts + ['minimum SOC invalid'] %}{% endif %}
+        {% if not (failsafe_max_soc_valid | bool(false)) %}{% set ns.parts = ns.parts + ['maximum SOC invalid'] %}{% endif %}
+        {{ ns.parts | join(', ') }}
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ not (failsafe_inputs_ok | bool(false)) }}"
+        sequence:
+          - variables:
+              failsafe_should_reset_gs: >-
+                {{ failsafe_gs_valid | bool(false)
+                   and (states(gs_entity | trim) | float(0) | abs) >= 0.5 }}
+              failsafe_log_due: >-
+                {% set interval = [diagnostic_log_interval_s | int(60), 60] | max %}
+                {{ (as_timestamp(now()) | int(0)) % interval == 0 }}
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ failsafe_should_reset_gs | bool(false) }}"
+                sequence:
+                  - service: number.set_value
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ gs_entity | trim }}"
+                    data:
+                      value: 0
+                  - delay:
+                      seconds: "{{ [gs_feedback_settle_s | float(5), 1] | max }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ failsafe_log_due | bool(false) }}"
+                sequence:
+                  - service: system_log.write
+                    data:
+                      level: warning
+                      message: >-
+                        SunEnergyXT zero feed-in | fail-safe active, control cycle stopped | GS reset={{ failsafe_should_reset_gs | bool(false) }} | reason: {{ failsafe_reason }}
+          - stop: >-
+              SunEnergyXT fail-safe: invalid or stale input data.
+
+
   - variables:
       meter_signed_total_sources:
         - shelly_total_power
