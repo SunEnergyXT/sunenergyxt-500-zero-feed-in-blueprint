@@ -1424,8 +1424,10 @@ action:
                 {{ failsafe_gs_valid | bool(false)
                    and (states(gs_entity | trim) | float(0) | abs) >= 0.5 }}
               failsafe_log_due: >-
+                {% set level = diagnostic_log_level | string | trim %}
                 {% set interval = [diagnostic_log_interval_s | int(60), 60] | max %}
-                {{ (as_timestamp(now()) | int(0)) % interval == 0 }}
+                {{ level in ['events', 'write', 'decision', 'debug']
+                   and (as_timestamp(now()) | int(0)) % interval == 0 }}
           - choose:
               - conditions:
                   - condition: template
