@@ -1740,7 +1740,7 @@ action:
   - variables:
       load_grid_supply_target_w: >-
         {% if (positive_load_power_w | float(0)) > 0 %}
-          {{ [[(target_grid_power_w | float(0)) - (estimated_home_load_w | float(0)), 0] | max, positive_load_power_w | float(0)] | min }}
+          {{ [[-1 * ((target_grid_power_w | float(0)) + (estimated_home_load_w | float(0))), 0] | max, positive_load_power_w | float(0)] | min }}
         {% else %}
           {{ 0 }}
         {% endif %}
