@@ -116,6 +116,7 @@ Zähler in kW liefert, Multiplikator `1000` verwenden.
 - Negative externe Zählerleistung bedeutet Netzbezug.
 - Bei voller Batterie kann die Automatisierung je nach Einstellung der Last oder der PV folgen.
 - Für `Nach Vollladung PV folgen` gibt es eine 1-%-Speicherzone nahe der oberen SOC-Grenze, damit der volle Zustand nicht ständig ein- und ausgeschaltet wird.
+- Wenn bei bestätigtem vollem Zustand Zähler-, GP-, LP- oder PV-Daten vorübergehend ungültig sind, hält der Blueprint den PV-Bypass mit `GS = 0 W` und maximalem `IS`. Bei ungültigem SOC, GS oder IS wird der Bypass nicht erzwungen.
 - Diagnoseprotokolle sind standardmäßig aus. Im Debug-Modus schreibt der Blueprint Entscheidungslogs höchstens alle 5 Sekunden.
 
 ### Erste Inbetriebnahme
@@ -225,6 +226,7 @@ Unit conversion: use multiplier `1` for W and `1000` for kW.
 - Negative external meter power means grid import.
 - At full battery, the automation follows the selected full-battery behavior.
 - For `Follow PV after full`, a 1% memory band near the upper SOC limit prevents repeated full-state toggling.
+- If meter, GP, LP, or PV data is temporarily invalid while the full state is confirmed, the blueprint holds PV bypass with `GS = 0 W` and maximum `IS`. It does not force bypass when SOC, GS, or IS is invalid.
 - Diagnostic logging is off by default. In debug mode, decision logs are written at most every 5 seconds.
 
 ### First run
