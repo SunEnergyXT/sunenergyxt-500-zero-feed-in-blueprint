@@ -1419,8 +1419,59 @@ action:
             value_template: "{{ not (failsafe_inputs_ok | bool(false)) }}"
         sequence:
           - variables:
+              failsafe_bypass_has_helper: >-
+                {{ full_hold_entity | string | trim | length > 0 }}
+              failsafe_bypass_current_hold: >-
+                {{ failsafe_bypass_has_helper | bool(false)
+                   and is_state(full_hold_entity | trim, 'on') }}
+              failsafe_bypass_is_target_w: >-
+                {{ [[state_attr(is_entity | trim, 'max') | float(2400), 2400] | min, 0] | max }}
+              failsafe_bypass_command_active: >-
+                {% set gs_tolerance = [gs_resolution_w | float(1), 5] | max %}
+                {% set is_tolerance = [is_resolution_w | float(10), 20] | max %}
+                {{ failsafe_gs_valid | bool(false)
+                   and failsafe_is_valid | bool(false)
+                   and ((states(gs_entity | trim) | float(0)) | abs) <= (gs_tolerance | float(5))
+                   and (states(is_entity | trim) | float(0)) >= ((failsafe_bypass_is_target_w | float(2400)) - (is_tolerance | float(20))) }}
+              failsafe_bypass_full_hold: >-
+                {% set soc = states(soc_entity | trim) | float(50) %}
+                {% set upper = max_charge_soc | float(100) %}
+                {% set release = upper - 5 %}
+                {% if not (failsafe_soc_valid | bool(false)) %}
+                  {{ false }}
+                {% elif failsafe_bypass_has_helper | bool(false) %}
+                  {% if soc >= upper %}
+                    {{ true }}
+                  {% elif soc <= release %}
+                    {{ false }}
+                  {% else %}
+                    {{ failsafe_bypass_current_hold | bool(false) }}
+                  {% endif %}
+                {% else %}
+                  {{ soc >= upper
+                     or (failsafe_bypass_command_active | bool(false)
+                         and soc >= (upper - 1)) }}
+                {% endif %}
+              failsafe_bypass_recovery: >-
+                {{ full_battery_mode == 'follow_pv'
+                   and failsafe_gs_valid | bool(false)
+                   and failsafe_is_valid | bool(false)
+                   and failsafe_bypass_full_hold | bool(false) }}
+              failsafe_bypass_should_latch_helper: >-
+                {{ failsafe_bypass_recovery | bool(false)
+                   and failsafe_bypass_has_helper | bool(false)
+                   and not (failsafe_bypass_current_hold | bool(false))
+                   and (states(soc_entity | trim) | float(50)) >= (max_charge_soc | float(100)) }}
+              failsafe_bypass_should_write_gs: >-
+                {{ failsafe_bypass_recovery | bool(false)
+                   and (states(gs_entity | trim) | float(0) | abs) >= 0.5 }}
+              failsafe_bypass_should_write_is: >-
+                {% set resolution = [is_resolution_w | float(10), 1] | max %}
+                {{ failsafe_bypass_recovery | bool(false)
+                   and ((states(is_entity | trim) | float(0)) - (failsafe_bypass_is_target_w | float(2400))) | abs >= resolution }}
               failsafe_should_reset_gs: >-
                 {{ failsafe_gs_valid | bool(false)
+                   and not (failsafe_bypass_recovery | bool(false))
                    and (failsafe_hard_failure_confirmed | bool(false))
                    and (states(gs_entity | trim) | float(0) | abs) >= 0.5 }}
               failsafe_log_due: >-
@@ -1428,6 +1479,44 @@ action:
                 {% set interval = [diagnostic_log_interval_s | int(60), 60] | max %}
                 {{ level in ['events', 'write', 'decision', 'debug']
                    and (as_timestamp(now()) | int(0)) % interval == 0 }}
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ failsafe_bypass_recovery | bool(false) }}"
+                sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ failsafe_bypass_should_latch_helper | bool(false) }}"
+                        sequence:
+                          - service: input_boolean.turn_on
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ full_hold_entity | trim }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ failsafe_bypass_should_write_gs | bool(false) }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ gs_entity | trim }}"
+                            data:
+                              value: 0
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ failsafe_bypass_should_write_is | bool(false) }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ is_entity | trim }}"
+                            data:
+                              value: "{{ failsafe_bypass_is_target_w }}"
+                  - stop: >-
+                      SunEnergyXT fail-safe: confirmed full-battery PV bypass is held with GS=0 and maximum IS.
           - choose:
               - conditions:
                   - condition: template
