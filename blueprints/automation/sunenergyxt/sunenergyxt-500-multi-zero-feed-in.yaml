@@ -898,8 +898,8 @@ blueprint:
             das schnelle Intervall aktiv; die Rueckmeldewartezeit gilt weiterhin.
             Nur aktivieren, wenn die
             Rueckmeldewartezeit zur tatsaechlichen Geraete- und Zaehlerverzoegerung
-            passt. Sonst kann Ueberschwingen zunehmen. Standardmaessig aus.
-          default: false
+            passt. Sonst kann Ueberschwingen zunehmen. Standardmaessig ein.
+          default: true
           selector:
             boolean:
         load_step_max_w:

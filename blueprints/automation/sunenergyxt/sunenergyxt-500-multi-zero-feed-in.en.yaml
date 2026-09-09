@@ -897,8 +897,8 @@ blueprint:
             The fast interval remains active at deviations of 10 W or more;
             feedback settle time still applies.
             Enable only when feedback settle time matches actual device and
-            meter delays; otherwise overshoot may increase. Disabled by default.
-          default: false
+            meter delays; otherwise overshoot may increase. Enabled by default.
+          default: true
           selector:
             boolean:
         load_step_max_w:
