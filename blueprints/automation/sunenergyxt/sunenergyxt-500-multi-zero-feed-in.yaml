@@ -888,6 +888,34 @@ blueprint:
               step: 1
               unit_of_measurement: s
               mode: box
+        fast_load_response:
+          name: Schneller Lastsprungausgleich (optional)
+          description: >-
+            Die Zaehlerabweichung bestimmt immer die Reaktion des gesamten
+            Systems. Diese Option erhoeht ab der Schwelle fuer grosse Fehler den
+            Sofortausgleich mit der eingestellten Korrekturverstaerkung (maximal
+            100 %), begrenzt durch die maximale Gesamtkorrektur. Ab 10 W bleibt
+            das schnelle Intervall aktiv; die Rueckmeldewartezeit gilt weiterhin.
+            Nur aktivieren, wenn die
+            Rueckmeldewartezeit zur tatsaechlichen Geraete- und Zaehlerverzoegerung
+            passt. Sonst kann Ueberschwingen zunehmen. Standardmaessig aus.
+          default: false
+          selector:
+            boolean:
+        load_step_max_w:
+          name: Maximale Gesamtkorrektur bei Lastspruengen
+          description: >-
+            Gesamtbudget pro Regelschritt, nicht pro Geraet. Gilt nur bei
+            eingeschalteter schneller Reaktion ab der Schwelle fuer grosse Fehler.
+            Ein kleiner Grenzwert erfordert bei grossen Lasten mehrere Schritte.
+          default: 1500
+          selector:
+            number:
+              min: 50
+              max: 7200
+              step: 50
+              unit_of_measurement: W
+              mode: box
         feedback_settle_s:
           name: Wartezeit fuer Rueckmeldung
           default: 5
@@ -1064,6 +1092,8 @@ variables:
   medium_interval_s: !input medium_interval_s
   fast_interval_s: !input fast_interval_s
   feedback_settle_s: !input feedback_settle_s
+  fast_load_response: !input fast_load_response
+  load_step_max_w: !input load_step_max_w
   max_meter_age_s: !input max_meter_age_s
   max_step_small_w: !input max_step_small_w
   max_step_medium_w: !input max_step_medium_w
@@ -1874,7 +1904,7 @@ action:
           dict(active=d7_active, low=d7_low, bypass=d7_bypass, lp=d7_lp_w, pv=d7_pv_w, gp=d7_gp_w, gs=d7_current_gs_w, inverter=d7_current_is_w, cap=d7_output_cap_w, grid_cap=d7_grid_cap_w, weight=d7_discharge_weight_w, full=d7_full, charge_cap=d7_charge_potential_w, charge_weight=d7_charge_weight_w),
           dict(active=d8_active, low=d8_low, bypass=d8_bypass, lp=d8_lp_w, pv=d8_pv_w, gp=d8_gp_w, gs=d8_current_gs_w, inverter=d8_current_is_w, cap=d8_output_cap_w, grid_cap=d8_grid_cap_w, weight=d8_discharge_weight_w, full=d8_full, charge_cap=d8_charge_potential_w, charge_weight=d8_charge_weight_w),
           dict(active=d9_active, low=d9_low, bypass=d9_bypass, lp=d9_lp_w, pv=d9_pv_w, gp=d9_gp_w, gs=d9_current_gs_w, inverter=d9_current_is_w, cap=d9_output_cap_w, grid_cap=d9_grid_cap_w, weight=d9_discharge_weight_w, full=d9_full, charge_cap=d9_charge_potential_w, charge_weight=d9_charge_weight_w)] %}
-        {% set ns = namespace(rows=[], count=0, floor=0.0, ceiling=0.0, command=0.0, low=0.0, high=0.0, full_floor=0.0, other_floor=0.0) %}
+        {% set ns = namespace(rows=[], count=0, floor=0.0, ceiling=0.0, command=0.0, measured=0.0, low=0.0, high=0.0, full_floor=0.0, other_floor=0.0) %}
         {% for d in devices %}
           {% set load = [d.lp | float(0), 0] | max %}
           {% set offset = (d.pv | float(0)) - (d.lp | float(0)) %}
@@ -1897,6 +1927,7 @@ action:
               {% set command = [d.gs | float(0), (d.inverter | float(0)) - load] | min %}
             {% else %}{% set command = d.gp | float(0) %}{% endif %}
             {% set ns.command = ns.command + command %}
+            {% set ns.measured = ns.measured + (d.gp | float(0)) %}
             {% set ns.ceiling = ns.ceiling + upper %}
           {% endif %}
         {% endfor %}
@@ -1904,9 +1935,24 @@ action:
           {{ dict(enabled=false, adjustment=0, targets=[]) }}
         {% else %}
           {% set error = (target_grid_power_w | float(0)) - (grid_power_w | float(0)) %}
+          {% set pending = ns.command - ns.measured %}
+          {% set fast = fast_load_response | default(false) | bool(false) and error | abs >= (large_error_w | float(150)) %}
           {% set limit = max_step_large_w | float(450) if error | abs >= large_error_w | float(150) else (max_step_medium_w | float(120) if error | abs >= small_error_w | float(30) else max_step_small_w | float(20)) %}
+          {% if fast %}{% set limit = load_step_max_w | default(1500) | float(1500) %}{% endif %}
           {% set delta = [[error * (gain_percent | float(100)) / 100, -limit] | max, limit] | min %}
-          {% set requested = ns.command + delta %}
+          {# On a large reversal, discard pending effort in the obsolete direction.
+             Keep normal feedback accumulation so healthy devices can cover a limited unit. #}
+          {% if fast %}
+            {# Subtract same-direction in-flight effort from the total correction,
+               rather than adding another emergency or ordinary step on top. #}
+            {% set credit = pending if pending * error > 0 else 0 %}
+            {# Do not intentionally leave 5-10% of a large step for a later cycle. #}
+            {% set gain = [[gain_percent | float(100), 0] | max, 100] | min / 100 %}
+            {% set residual = [error * gain - credit, 0] | max if error > 0 else [error * gain - credit, 0] | min %}
+            {% set delta = [[residual, -limit] | max, limit] | min %}
+          {% endif %}
+          {% set reversing = fast and (ns.command - ns.measured) * error < 0 %}
+          {% set requested = (ns.measured if reversing else ns.command) + delta %}
           {% if full_battery_mode == 'follow_load' and (base_total_gs_w | float(0)) < ns.full_floor + ns.other_floor %}
             {% set requested = [requested, base_total_gs_w | float(0)] | min %}
           {% endif %}
@@ -1957,9 +2003,27 @@ action:
           {% endfor %}
           {% set transfer_limit = max_step_large_w | float(450) if plan.adjustment >= large_error_w | float(150) else (max_step_medium_w | float(120) if plan.adjustment >= small_error_w | float(30) else max_step_small_w | float(20)) %}
           {% set fraction = [1, transfer_limit / [plan.adjustment, 1] | max] | min %}
+          {# Separate net household correction from zero-sum battery rebalancing. #}
+          {% set motion = namespace(up=0.0, down=0.0, baselines=[], deltas=[], net=[], residual=0.0) %}
+          {% for r in rows.values %}
+              {% set baseline = [[r.d.gp | float(0), r.lower] | max, r.upper] | min %}
+              {% set change = plan.values[loop.index0] - baseline %}
+              {% set motion.baselines = motion.baselines + [baseline] %}
+              {% set motion.deltas = motion.deltas + [change] %}
+              {% set motion.up = motion.up + ([change, 0] | max) %}
+              {% set motion.down = motion.down + ([-change, 0] | max) %}
+          {% endfor %}
+          {% set net_change = motion.up - motion.down %}
+          {% for change in motion.deltas %}
+              {% set net = change * net_change / [motion.up, 0.000001] | max if net_change > 0 and change > 0 else (change * (-net_change) / [motion.down, 0.000001] | max if net_change < 0 and change < 0 else 0) %}
+              {% set motion.net = motion.net + [net] %}
+              {% set motion.residual = [motion.residual, (change - net) | abs] | max %}
+          {% endfor %}
+          {% set fraction = [1, transfer_limit / [motion.residual, 1] | max] | min %}
           {% set ramp = namespace(values=[], export=0.0) %}
           {% for r in rows.values %}
-            {% set q = (r.d.gp | float(0)) + fraction * (plan.values[loop.index0] - (r.d.gp | float(0))) %}
+            {% set i = loop.index0 %}
+            {% set q = motion.baselines[i] + motion.net[i] + fraction * (motion.deltas[i] - motion.net[i]) %}
             {% set q = [[q, r.lower] | max, r.upper] | min %}
             {% if r.d.full | bool(false) and full_battery_mode == 'follow_load' %}{% set q = [q, plan.values[loop.index0]] | min %}{% endif %}
             {% set ramp.values = ramp.values + [q] %}
@@ -1992,7 +2056,8 @@ action:
           {{ dict(enabled=true, adjustment=plan.adjustment, targets=plan.targets) }}
         {% endif %}
       control_interval_s: >-
-        {% if [total_abs_error_w | float(0), battery_dispatch.adjustment | float(0)] | max >= large_error_w | float(150) %}{{ fast_interval_s }}{% elif [total_abs_error_w | float(0), battery_dispatch.adjustment | float(0)] | max >= small_error_w | float(30) %}{{ medium_interval_s }}{% else %}{{ slow_interval_s }}{% endif %}
+        {% set error = total_abs_error_w | float(0) %}
+        {% if fast_load_response | default(false) | bool(false) and error >= 10 %}{{ fast_interval_s }}{% elif error >= large_error_w | float(150) %}{{ fast_interval_s }}{% elif error >= small_error_w | float(30) %}{{ medium_interval_s }}{% else %}{{ slow_interval_s }}{% endif %}
       # A coupled allocation must not reuse a meter sample from before its last write.
       meter_sample_timestamp: >-
         {% set source = effective_meter_power_source | trim %}
@@ -2017,7 +2082,9 @@ action:
         {% for entity in entities %}{% if active[loop.index0] | bool(false) %}
           {% set ns.last_write = [ns.last_write, as_timestamp(states[entity | trim].last_changed, 0)] | max %}
         {% endif %}{% endfor %}
-        {{ (meter_sample_timestamp | float(0)) > ns.last_write + (feedback_settle_s | float(5)) }}
+        {% set settled = as_timestamp(now()) - ns.last_write >= (feedback_settle_s | float(5)) %}
+        {% set fresh_after_write = (meter_sample_timestamp | float(0)) > ns.last_write %}
+        {{ settled and fresh_after_write if fast_load_response | default(false) | bool(false) else (meter_sample_timestamp | float(0)) > ns.last_write + (feedback_settle_s | float(5)) }}
       d1_gs_ready: >-
         {% if not (d1_active | bool(false)) or not (inputs_ok | bool(false)) or not (dispatch_feedback_ready | bool(false)) %}false{% else %}{{ (as_timestamp(now()) - as_timestamp(states[d1_gs | trim].last_changed, 0)) >= ([control_interval_s | float(7), feedback_settle_s | float(5)] | max) and (as_timestamp(now()) - as_timestamp(states[d1_is | trim].last_changed, 0)) >= ([control_interval_s | float(7), feedback_settle_s | float(5)] | max) }}{% endif %}
       d1_is_ready: >-
@@ -2607,204 +2674,426 @@ action:
             continue_on_error: true
             target:
               entity_id: "{{ d9_low_hold | trim }}"
+  # Isolate devices while keeping each device's GS/IS writes ordered.
   - choose:
       - conditions:
           - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d1_gs_ready | bool(false) and ((d1_gs_target_w | float(0)) - d1_current_gs_w | float(0)) | abs >= 1 }}"
+            value_template: >-
+              {% set devices = [dict(active=d1_active, gs=d1_gs, inverter=d1_is), dict(active=d2_active, gs=d2_gs, inverter=d2_is), dict(active=d3_active, gs=d3_gs, inverter=d3_is), dict(active=d4_active, gs=d4_gs, inverter=d4_is), dict(active=d5_active, gs=d5_gs, inverter=d5_is), dict(active=d6_active, gs=d6_gs, inverter=d6_is), dict(active=d7_active, gs=d7_gs, inverter=d7_is), dict(active=d8_active, gs=d8_gs, inverter=d8_is), dict(active=d9_active, gs=d9_gs, inverter=d9_is)] %}
+              {% set ns = namespace(entities=[]) %}
+              {% for d in devices %}{% if d.active | bool(false) %}
+                {% set ns.entities = ns.entities + [d.gs | trim, d.inverter | trim] %}
+              {% endif %}{% endfor %}
+              {{ ns.entities | unique | list | length == ns.entities | length }}
         sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d1_gs | trim }}"
-            data:
-              value: "{{ d1_gs_target_w | float(0) | round(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d1_is_ready | bool(false) and ((d1_is_write_w | float(0)) - d1_current_is_w | float(0)) | abs >= 10 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d1_is | trim }}"
-            data:
-              value: "{{ d1_is_write_w | float(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d2_gs_ready | bool(false) and ((d2_gs_target_w | float(0)) - d2_current_gs_w | float(0)) | abs >= 1 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d2_gs | trim }}"
-            data:
-              value: "{{ d2_gs_target_w | float(0) | round(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d2_is_ready | bool(false) and ((d2_is_write_w | float(0)) - d2_current_is_w | float(0)) | abs >= 10 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d2_is | trim }}"
-            data:
-              value: "{{ d2_is_write_w | float(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d3_gs_ready | bool(false) and ((d3_gs_target_w | float(0)) - d3_current_gs_w | float(0)) | abs >= 1 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d3_gs | trim }}"
-            data:
-              value: "{{ d3_gs_target_w | float(0) | round(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d3_is_ready | bool(false) and ((d3_is_write_w | float(0)) - d3_current_is_w | float(0)) | abs >= 10 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d3_is | trim }}"
-            data:
-              value: "{{ d3_is_write_w | float(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d4_gs_ready | bool(false) and ((d4_gs_target_w | float(0)) - d4_current_gs_w | float(0)) | abs >= 1 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d4_gs | trim }}"
-            data:
-              value: "{{ d4_gs_target_w | float(0) | round(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d4_is_ready | bool(false) and ((d4_is_write_w | float(0)) - d4_current_is_w | float(0)) | abs >= 10 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d4_is | trim }}"
-            data:
-              value: "{{ d4_is_write_w | float(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d5_gs_ready | bool(false) and ((d5_gs_target_w | float(0)) - d5_current_gs_w | float(0)) | abs >= 1 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d5_gs | trim }}"
-            data:
-              value: "{{ d5_gs_target_w | float(0) | round(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d5_is_ready | bool(false) and ((d5_is_write_w | float(0)) - d5_current_is_w | float(0)) | abs >= 10 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d5_is | trim }}"
-            data:
-              value: "{{ d5_is_write_w | float(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d6_gs_ready | bool(false) and ((d6_gs_target_w | float(0)) - d6_current_gs_w | float(0)) | abs >= 1 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d6_gs | trim }}"
-            data:
-              value: "{{ d6_gs_target_w | float(0) | round(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d6_is_ready | bool(false) and ((d6_is_write_w | float(0)) - d6_current_is_w | float(0)) | abs >= 10 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d6_is | trim }}"
-            data:
-              value: "{{ d6_is_write_w | float(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d7_gs_ready | bool(false) and ((d7_gs_target_w | float(0)) - d7_current_gs_w | float(0)) | abs >= 1 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d7_gs | trim }}"
-            data:
-              value: "{{ d7_gs_target_w | float(0) | round(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d7_is_ready | bool(false) and ((d7_is_write_w | float(0)) - d7_current_is_w | float(0)) | abs >= 10 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d7_is | trim }}"
-            data:
-              value: "{{ d7_is_write_w | float(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d8_gs_ready | bool(false) and ((d8_gs_target_w | float(0)) - d8_current_gs_w | float(0)) | abs >= 1 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d8_gs | trim }}"
-            data:
-              value: "{{ d8_gs_target_w | float(0) | round(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d8_is_ready | bool(false) and ((d8_is_write_w | float(0)) - d8_current_is_w | float(0)) | abs >= 10 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d8_is | trim }}"
-            data:
-              value: "{{ d8_is_write_w | float(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d9_gs_ready | bool(false) and ((d9_gs_target_w | float(0)) - d9_current_gs_w | float(0)) | abs >= 1 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d9_gs | trim }}"
-            data:
-              value: "{{ d9_gs_target_w | float(0) | round(0) }}"
-  - choose:
-      - conditions:
-          - condition: template
-            value_template: "{{ inputs_ok | bool(false) and d9_is_ready | bool(false) and ((d9_is_write_w | float(0)) - d9_current_is_w | float(0)) | abs >= 10 }}"
-        sequence:
-          - service: number.set_value
-            continue_on_error: true
-            target:
-              entity_id: "{{ d9_is | trim }}"
-            data:
-              value: "{{ d9_is_write_w | float(0) }}"
+          - parallel:
+              - sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d1_gs_ready | bool(false) and ((d1_gs_target_w | float(0)) - d1_current_gs_w | float(0)) | abs >= 1 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d1_gs | trim }}"
+                            data:
+                              value: "{{ d1_gs_target_w | float(0) | round(0) }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d1_is_ready | bool(false) and ((d1_is_write_w | float(0)) - d1_current_is_w | float(0)) | abs >= 10 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d1_is | trim }}"
+                            data:
+                              value: "{{ d1_is_write_w | float(0) }}"
+              - sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d2_gs_ready | bool(false) and ((d2_gs_target_w | float(0)) - d2_current_gs_w | float(0)) | abs >= 1 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d2_gs | trim }}"
+                            data:
+                              value: "{{ d2_gs_target_w | float(0) | round(0) }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d2_is_ready | bool(false) and ((d2_is_write_w | float(0)) - d2_current_is_w | float(0)) | abs >= 10 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d2_is | trim }}"
+                            data:
+                              value: "{{ d2_is_write_w | float(0) }}"
+              - sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d3_gs_ready | bool(false) and ((d3_gs_target_w | float(0)) - d3_current_gs_w | float(0)) | abs >= 1 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d3_gs | trim }}"
+                            data:
+                              value: "{{ d3_gs_target_w | float(0) | round(0) }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d3_is_ready | bool(false) and ((d3_is_write_w | float(0)) - d3_current_is_w | float(0)) | abs >= 10 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d3_is | trim }}"
+                            data:
+                              value: "{{ d3_is_write_w | float(0) }}"
+              - sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d4_gs_ready | bool(false) and ((d4_gs_target_w | float(0)) - d4_current_gs_w | float(0)) | abs >= 1 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d4_gs | trim }}"
+                            data:
+                              value: "{{ d4_gs_target_w | float(0) | round(0) }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d4_is_ready | bool(false) and ((d4_is_write_w | float(0)) - d4_current_is_w | float(0)) | abs >= 10 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d4_is | trim }}"
+                            data:
+                              value: "{{ d4_is_write_w | float(0) }}"
+              - sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d5_gs_ready | bool(false) and ((d5_gs_target_w | float(0)) - d5_current_gs_w | float(0)) | abs >= 1 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d5_gs | trim }}"
+                            data:
+                              value: "{{ d5_gs_target_w | float(0) | round(0) }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d5_is_ready | bool(false) and ((d5_is_write_w | float(0)) - d5_current_is_w | float(0)) | abs >= 10 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d5_is | trim }}"
+                            data:
+                              value: "{{ d5_is_write_w | float(0) }}"
+              - sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d6_gs_ready | bool(false) and ((d6_gs_target_w | float(0)) - d6_current_gs_w | float(0)) | abs >= 1 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d6_gs | trim }}"
+                            data:
+                              value: "{{ d6_gs_target_w | float(0) | round(0) }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d6_is_ready | bool(false) and ((d6_is_write_w | float(0)) - d6_current_is_w | float(0)) | abs >= 10 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d6_is | trim }}"
+                            data:
+                              value: "{{ d6_is_write_w | float(0) }}"
+              - sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d7_gs_ready | bool(false) and ((d7_gs_target_w | float(0)) - d7_current_gs_w | float(0)) | abs >= 1 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d7_gs | trim }}"
+                            data:
+                              value: "{{ d7_gs_target_w | float(0) | round(0) }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d7_is_ready | bool(false) and ((d7_is_write_w | float(0)) - d7_current_is_w | float(0)) | abs >= 10 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d7_is | trim }}"
+                            data:
+                              value: "{{ d7_is_write_w | float(0) }}"
+              - sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d8_gs_ready | bool(false) and ((d8_gs_target_w | float(0)) - d8_current_gs_w | float(0)) | abs >= 1 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d8_gs | trim }}"
+                            data:
+                              value: "{{ d8_gs_target_w | float(0) | round(0) }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d8_is_ready | bool(false) and ((d8_is_write_w | float(0)) - d8_current_is_w | float(0)) | abs >= 10 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d8_is | trim }}"
+                            data:
+                              value: "{{ d8_is_write_w | float(0) }}"
+              - sequence:
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d9_gs_ready | bool(false) and ((d9_gs_target_w | float(0)) - d9_current_gs_w | float(0)) | abs >= 1 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d9_gs | trim }}"
+                            data:
+                              value: "{{ d9_gs_target_w | float(0) | round(0) }}"
+                  - choose:
+                      - conditions:
+                          - condition: template
+                            value_template: "{{ inputs_ok | bool(false) and d9_is_ready | bool(false) and ((d9_is_write_w | float(0)) - d9_current_is_w | float(0)) | abs >= 10 }}"
+                        sequence:
+                          - service: number.set_value
+                            continue_on_error: true
+                            target:
+                              entity_id: "{{ d9_is | trim }}"
+                            data:
+                              value: "{{ d9_is_write_w | float(0) }}"
+    # Preserve serial ordering if overrides point multiple slots at one entity.
+    default:
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d1_gs_ready | bool(false) and ((d1_gs_target_w | float(0)) - d1_current_gs_w | float(0)) | abs >= 1 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d1_gs | trim }}"
+                data:
+                  value: "{{ d1_gs_target_w | float(0) | round(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d1_is_ready | bool(false) and ((d1_is_write_w | float(0)) - d1_current_is_w | float(0)) | abs >= 10 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d1_is | trim }}"
+                data:
+                  value: "{{ d1_is_write_w | float(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d2_gs_ready | bool(false) and ((d2_gs_target_w | float(0)) - d2_current_gs_w | float(0)) | abs >= 1 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d2_gs | trim }}"
+                data:
+                  value: "{{ d2_gs_target_w | float(0) | round(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d2_is_ready | bool(false) and ((d2_is_write_w | float(0)) - d2_current_is_w | float(0)) | abs >= 10 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d2_is | trim }}"
+                data:
+                  value: "{{ d2_is_write_w | float(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d3_gs_ready | bool(false) and ((d3_gs_target_w | float(0)) - d3_current_gs_w | float(0)) | abs >= 1 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d3_gs | trim }}"
+                data:
+                  value: "{{ d3_gs_target_w | float(0) | round(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d3_is_ready | bool(false) and ((d3_is_write_w | float(0)) - d3_current_is_w | float(0)) | abs >= 10 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d3_is | trim }}"
+                data:
+                  value: "{{ d3_is_write_w | float(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d4_gs_ready | bool(false) and ((d4_gs_target_w | float(0)) - d4_current_gs_w | float(0)) | abs >= 1 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d4_gs | trim }}"
+                data:
+                  value: "{{ d4_gs_target_w | float(0) | round(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d4_is_ready | bool(false) and ((d4_is_write_w | float(0)) - d4_current_is_w | float(0)) | abs >= 10 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d4_is | trim }}"
+                data:
+                  value: "{{ d4_is_write_w | float(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d5_gs_ready | bool(false) and ((d5_gs_target_w | float(0)) - d5_current_gs_w | float(0)) | abs >= 1 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d5_gs | trim }}"
+                data:
+                  value: "{{ d5_gs_target_w | float(0) | round(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d5_is_ready | bool(false) and ((d5_is_write_w | float(0)) - d5_current_is_w | float(0)) | abs >= 10 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d5_is | trim }}"
+                data:
+                  value: "{{ d5_is_write_w | float(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d6_gs_ready | bool(false) and ((d6_gs_target_w | float(0)) - d6_current_gs_w | float(0)) | abs >= 1 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d6_gs | trim }}"
+                data:
+                  value: "{{ d6_gs_target_w | float(0) | round(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d6_is_ready | bool(false) and ((d6_is_write_w | float(0)) - d6_current_is_w | float(0)) | abs >= 10 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d6_is | trim }}"
+                data:
+                  value: "{{ d6_is_write_w | float(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d7_gs_ready | bool(false) and ((d7_gs_target_w | float(0)) - d7_current_gs_w | float(0)) | abs >= 1 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d7_gs | trim }}"
+                data:
+                  value: "{{ d7_gs_target_w | float(0) | round(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d7_is_ready | bool(false) and ((d7_is_write_w | float(0)) - d7_current_is_w | float(0)) | abs >= 10 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d7_is | trim }}"
+                data:
+                  value: "{{ d7_is_write_w | float(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d8_gs_ready | bool(false) and ((d8_gs_target_w | float(0)) - d8_current_gs_w | float(0)) | abs >= 1 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d8_gs | trim }}"
+                data:
+                  value: "{{ d8_gs_target_w | float(0) | round(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d8_is_ready | bool(false) and ((d8_is_write_w | float(0)) - d8_current_is_w | float(0)) | abs >= 10 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d8_is | trim }}"
+                data:
+                  value: "{{ d8_is_write_w | float(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d9_gs_ready | bool(false) and ((d9_gs_target_w | float(0)) - d9_current_gs_w | float(0)) | abs >= 1 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d9_gs | trim }}"
+                data:
+                  value: "{{ d9_gs_target_w | float(0) | round(0) }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: "{{ inputs_ok | bool(false) and d9_is_ready | bool(false) and ((d9_is_write_w | float(0)) - d9_current_is_w | float(0)) | abs >= 10 }}"
+            sequence:
+              - service: number.set_value
+                continue_on_error: true
+                target:
+                  entity_id: "{{ d9_is | trim }}"
+                data:
+                  value: "{{ d9_is_write_w | float(0) }}"
   - choose:
       - conditions:
           - condition: template
