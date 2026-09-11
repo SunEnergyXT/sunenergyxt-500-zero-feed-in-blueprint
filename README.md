@@ -1,295 +1,111 @@
-# SunEnergyXT 500 Series Zero Feed-in Blueprints
+# SunEnergyXT 500: Nulleinspeisung mit Home Assistant
 
-**Language / Sprache:** [Deutsch](#deutsch) | [English](#english)
+**Deutsch** | [English](README.en.md)
 
-**Default blueprint:** Deutsch  
-**Optional blueprint:** English
+Ein SunEnergyXT 500 / 500 Pro oder mehrere Geräte gemeinsam: Diese Blueprints
+regeln die Leistung anhand eines externen Home-Assistant-Zählers.
 
-Home Assistant blueprints for SunEnergyXT 500 / 500 Pro systems with an external
-power meter. Choose the single-device blueprint for one device, or the multi-space
-blueprint to coordinate up to nine devices behind one household meter.
-Home Assistant can import either blueprint from the raw URLs below.
+## Blueprint auswählen
 
-## Blueprint URLs
+| Blueprint | Einsatz | Anleitung |
+| --- | --- | --- |
+| Einzelgerät | Ein SunEnergyXT 500 / 500 Pro | [Einzelgerät einrichten](#einzelgerät-einrichten) |
+| Multi-Space | Bis zu neun Geräte an einem Haushaltszähler | [Multi-Space einrichten](#multi-space-einrichten) |
 
-### Single Device / Einzelgerät
+**Deutsche Import-URLs:**
 
-| Language | Home Assistant import URL |
+| Blueprint | Home-Assistant-Import-URL |
 | --- | --- |
-| Deutsch | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml` |
-| English | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.en.yaml` |
+| Einzelgerät | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml` |
+| Multi-Space | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-multi-zero-feed-in.yaml` |
 
-### Multi-Space / Mehrere Geräte
+## Voraussetzungen
 
-| Language | Home Assistant import URL |
+- Home Assistant 2024.6 oder neuer.
+- Die SunEnergyXT 500 / 500 Pro Integration ist eingerichtet.
+- Ein externer Zähler liefert die aktuelle Leistung in Home Assistant, nicht nur Energiezählerstände.
+
+## Blueprint importieren
+
+In Home Assistant `Einstellungen` -> `Automatisierungen & Szenen` -> `Blueprints`
+-> `Blueprint importieren` öffnen. Die passende URL aus der Tabelle oben einfügen
+und anschließend aus dem importierten Blueprint eine Automatisierung erstellen.
+
+Alternativ die gewählte YAML-Datei unter
+`/config/blueprints/automation/sunenergyxt/` ablegen und die Blueprint-Seite neu laden.
+
+## Einzelgerät einrichten
+
+`SunEnergyXT 500 Serie - Nulleinspeisung` auswählen. Dieser Blueprint passt den
+Sollwert am Netzanschluss und die maximale Wechselrichterleistung eines Geräts an.
+Betriebsmodus und Entlademodus werden nicht verändert.
+
+1. Das `SunEnergyXT-Gerät` auswählen.
+2. SOC-Grenzen, maximale Netzeinspeiseleistung und maximale AC-gekoppelte Ladeleistung einstellen.
+3. Das Verhalten bei voller Batterie auswählen.
+4. Den Zähler wie unter [Zähler konfigurieren](#zähler-konfigurieren) einrichten.
+5. Die Automatisierung zunächst deaktiviert speichern und die Hinweise zur Inbetriebnahme unten beachten.
+
+| Einstellung | Beschreibung |
 | --- | --- |
-| Deutsch | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-multi-zero-feed-in.yaml` |
-| English | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-multi-zero-feed-in.en.yaml` |
+| Verhalten bei voller Batterie | `Nach Vollladung Last folgen` oder `Nach Vollladung PV folgen` |
+| Maximale Netzeinspeiseleistung | 800 W für SunEnergyXT 500, 2400 W für SunEnergyXT 500 Pro, sofern vor Ort kein niedrigerer Grenzwert gilt |
+| System Entladegrenze | Wird in die Geräteeinstellung geschrieben und als untere SOC-Grenze verwendet |
+| System Ladegrenze | Wird in die Geräteeinstellung geschrieben und als obere SOC-Grenze verwendet |
+| Maximale AC-gekoppelte Ladeleistung | Bis zu 2400 W je Gerät, falls vor Ort zulässig |
 
-## Deutsch
+Beim Einzelgeräte-Blueprint verhindert eine 1-%-Speicherzone nahe der oberen
+SOC-Grenze wiederholtes Umschalten bei `Nach Vollladung PV folgen`. Sind bei
+bestätigtem vollem Zustand Zähler-, GP-, LP- oder PV-Daten vorübergehend ungültig,
+hält er den PV-Bypass mit `GS = 0 W` und maximalem `IS`. Bei ungültigem SOC, GS
+oder IS wird der Bypass nicht erzwungen.
 
-[English](#english)
+## Multi-Space einrichten
 
-### Multi-Space: mehrere Geräte, ein Zähler
-
-Der Multi-Space-Blueprint koordiniert bis zu **neun SunEnergyXT 500 / 500 Pro**
-an einem Haushaltszähler. Die Netzanschlüsse der Geräte müssen unabhängig
-voneinander hinter diesem Zähler angeschlossen sein, nicht am Lastausgang eines
-anderen gesteuerten Geräts. Eine Automatisierung regelt die gesamte Gerätegruppe.
+`SunEnergyXT 500 Serie - Multi-Space-Nulleinspeisung` auswählen. Eine Automatisierung
+koordiniert bis zu **neun SunEnergyXT 500 / 500 Pro** an einem Haushaltszähler.
 Gerätemodelle werden über die Integration erkannt; eine manuelle Modellwahl ist
 nicht erforderlich.
 
-1. Unter `Blueprint importieren` die deutsche Multi-Space-URL aus der Tabelle oben einfügen.
-2. Aus `SunEnergyXT 500 Serie - Multi-Space-Nulleinspeisung` eine Automatisierung erstellen.
-3. Gerät 1 und bis zu acht weitere Geräte auswählen; ungenutzte Gerätefelder leer lassen.
-4. Den Haushaltszähler auswählen und nur das passende Zählerformular ausfüllen. Die unten beschriebenen Zählertypen einschließlich Dreiphasensumme werden unterstützt.
-5. SOC-Grenzen, Leistungsgrenzen und das Verhalten bei voller Batterie einstellen.
-6. Vor dem Aktivieren andere Automatisierungen deaktivieren, die dieselben Geräte regeln, einschließlich bisheriger Einzelgeräte-Automatisierungen.
+Die Netzanschlüsse der Geräte müssen unabhängig voneinander hinter diesem Zähler
+angeschlossen sein, nicht am Lastausgang eines anderen gesteuerten Geräts.
+
+1. Gerät 1 und bis zu acht weitere Geräte auswählen; ungenutzte Gerätefelder leer lassen.
+2. SOC-Grenzen, Leistungsgrenzen und das Verhalten bei voller Batterie einstellen.
+3. Den Haushaltszähler wie unter [Zähler konfigurieren](#zähler-konfigurieren) einrichten.
+4. Die Automatisierung zunächst deaktiviert speichern.
+5. Vor dem Aktivieren andere Automatisierungen deaktivieren, die dieselben Geräte regeln, einschließlich bisheriger Einzelgeräte-Automatisierungen.
 
 `Schneller Lastsprungausgleich (optional)` ist standardmäßig eingeschaltet und
 richtet die Korrektur nach der gesamten Leistungsabweichung am Haushaltszähler.
 Die Wartezeit für Rückmeldungen gilt weiterhin; die tatsächliche Reaktionszeit
 hängt auch von Zähler und Geräten ab. Eine bereits ausdrücklich gespeicherte
-Einstellung `aus` bleibt erhalten. Diagnoseprotokolle sind standardmäßig aus.
+Einstellung `aus` bleibt erhalten.
 
-Die folgenden Abschnitte beschreiben die Einrichtung des **Einzelgeräte-Blueprints**.
+## Zähler konfigurieren
 
-### Überblick
-
-Dieser Blueprint regelt eine SunEnergyXT 500 / 500 Pro Anlage mit einem
-externen Home-Assistant-Zähler auf Nulleinspeisung. Die Automatisierung passt
-den Sollwert der Leistung am Netzanschluss und den Sollwert der maximalen
-Wechselrichterleistung an. Betriebsmodus und Entlademodus des Geräts werden
-nicht verändert.
-
-### Voraussetzungen
-
-- Home Assistant 2024.6 oder neuer.
-- SunEnergyXT 500 / 500 Pro Integration ist eingerichtet.
-- Ein externer Zähler ist in Home Assistant verfügbar.
-- Der Zähler liefert aktuelle Leistung, nicht nur Energiezählerstände.
-
-Unterstützte Zählerformen:
+Die Zählerkonfiguration gilt für beide Blueprints. Nur das zum Zählertyp passende
+Formular öffnen und ausfüllen; die übrigen Formulare leer lassen.
 
 | Zählertyp | Konfiguration |
 | --- | --- |
-| Shelly Pro 3EM | Zählertyp `Shelly Pro 3EM` wählen und das Zählergerät auswählen |
-| EcoTracker | Zählertyp `EcoTracker` wählen und das Zählergerät auswählen |
-| BitShake / Tasmota | Zählertyp `BitShake / Tasmota` wählen und das Zählergerät auswählen |
-| Shelly 3EM | Zählertyp `Shelly 3EM` wählen und die drei Phasengeräte L1 / L2 / L3 auswählen |
-| Benutzerdefinierter Zähler | Zählertyp `Benutzerdefinierter Zähler` wählen, Formel auswählen und passende Entitäten eintragen |
+| Shelly Pro 3EM | Zählertyp wählen und das Zählergerät auswählen |
+| EcoTracker | Zählertyp wählen und das Zählergerät auswählen |
+| BitShake / Tasmota | Zählertyp wählen und das Zählergerät auswählen |
+| Shelly 3EM | Die drei Phasengeräte L1 / L2 / L3 auswählen; ihre Leistungen werden summiert |
+| Benutzerdefinierter Zähler | Leistungsformel auswählen und passende Entitäten eintragen |
 
-### Blueprint importieren
+Die Vorzeicheneinstellung muss zum tatsächlichen Zählerwert passen:
 
-In Home Assistant öffnen:
+- Zeigt der Zähler Einspeisung positiv an, die Option für positive Einspeisung wählen.
+- Zeigt der Zähler Netzbezug positiv an, die Option für positiven Netzbezug wählen.
+- Bei Leistung in W den Multiplikator `1` verwenden, bei kW `1000`.
 
-`Einstellungen` -> `Automatisierungen & Szenen` -> `Blueprints` -> `Blueprint importieren`
+## Inbetriebnahme und Hinweise
 
-Deutsche Standard-URL einfügen:
-
-```text
-https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml
-```
-
-Für englische Blueprint-Texte diese URL verwenden:
-
-```text
-https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.en.yaml
-```
-
-Lokale Installation ist ebenfalls möglich. Die YAML-Datei nach Home Assistant
-kopieren:
-
-```text
-/config/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml
-```
-
-Danach die Blueprint-Seite neu laden.
-
-### Automatisierung erstellen
-
-1. `Einstellungen` -> `Automatisierungen & Szenen` -> `Blueprints` öffnen.
-2. `SunEnergyXT 500 Serie - Nulleinspeisung` auswählen.
-3. `Automatisierung erstellen` wählen.
-4. `SunEnergyXT-Gerät` auswählen.
-5. SOC-Grenzen, maximale Netzeinspeiseleistung und maximale AC-gekoppelte Ladeleistung einstellen.
-6. Zählertyp wählen und nur das dazu passende Zählerformular ausfüllen.
-7. Speichern und die Automatisierung aktivieren.
-
-### SunEnergyXT-Einstellungen
-
-| Einstellung | Beschreibung |
-| --- | --- |
-| SunEnergyXT-Gerät | Das zu steuernde SunEnergyXT 500 / 500 Pro Gerät |
-| Verhalten bei voller Batterie | `Nach Vollladung Last folgen` oder `Nach Vollladung PV folgen` |
-| Maximale Netzeinspeiseleistung | 800 W für SunEnergyXT 500, 2400 W für SunEnergyXT 500 Pro, sofern vor Ort kein niedrigerer Grenzwert gilt |
-| System Entladegrenze | Wird in die Geräteeinstellung geschrieben und als untere SOC-Grenze verwendet |
-| System Ladegrenze | Wird in die Geräteeinstellung geschrieben und als obere SOC-Grenze verwendet |
-| Maximale AC-gekoppelte Ladeleistung | SunEnergyXT 500 und 500 Pro können bis zu 2400 W verwenden, falls vor Ort zulässig |
-
-### Zähler-Einstellungen
-
-Der Blueprint zeigt alle Zählerformulare an, weil Home Assistant
-Blueprint-Felder nicht dynamisch anhand des Zählertyps ausblenden kann. Nur das
-passende Formular öffnen und ausfüllen; die anderen leer lassen.
-
-Bei falscher Richtung unter `Erweiterte Zählerzeichen- und Einheitseinstellungen`
-die Vorzeichenlogik ändern:
-
-| Beobachtung | Einstellung |
-| --- | --- |
-| Einspeisung wird positiv angezeigt | `Export/feed-in is positive` |
-| Netzbezug wird positiv angezeigt | `Import/grid consumption is positive` |
-
-Einheit: Wenn der Zähler in W liefert, Multiplikator `1` verwenden. Wenn der
-Zähler in kW liefert, Multiplikator `1000` verwenden.
-
-### Verhalten und Diagnose
-
-- Standardziel ist `0 W` am externen Zähler.
-- Positive externe Zählerleistung bedeutet Einspeisung.
-- Negative externe Zählerleistung bedeutet Netzbezug.
-- Bei voller Batterie kann die Automatisierung je nach Einstellung der Last oder der PV folgen.
-- Für `Nach Vollladung PV folgen` gibt es eine 1-%-Speicherzone nahe der oberen SOC-Grenze, damit der volle Zustand nicht ständig ein- und ausgeschaltet wird.
-- Wenn bei bestätigtem vollem Zustand Zähler-, GP-, LP- oder PV-Daten vorübergehend ungültig sind, hält der Blueprint den PV-Bypass mit `GS = 0 W` und maximalem `IS`. Bei ungültigem SOC, GS oder IS wird der Bypass nicht erzwungen.
-- Diagnoseprotokolle sind standardmäßig aus. Im Debug-Modus schreibt der Blueprint Entscheidungslogs höchstens alle 5 Sekunden.
-
-### Erste Inbetriebnahme
-
-- Automatisierung zunächst deaktiviert speichern.
-- Prüfen, dass SunEnergyXT-Gerät und Zählerentitäten nicht `unknown` oder `unavailable` sind.
-- Automatisierung aktivieren und prüfen, ob der externe Zähler in Richtung `0 W` läuft.
-- Bei falscher Richtung die Vorzeicheneinstellung des Zählers korrigieren.
-- Bei langsamer Reaktion die Aktualisierungsrate des externen Zählers und die erweiterten Regelintervalle prüfen.
-
-## English
-
-[Deutsch](#deutsch)
-
-### Multi-space: multiple devices, one meter
-
-The multi-space blueprint coordinates up to **nine SunEnergyXT 500 / 500 Pro
-devices** using one household meter. Each device's grid port must connect
-independently behind that meter, not to another controlled device's load port.
-One automation controls the whole group. Device models are detected through
-the integration; manual model selection is not required.
-
-1. In `Import blueprint`, paste the English multi-space URL from the table above.
-2. Create an automation from `SunEnergyXT 500 Series - Multi-Space Zero Feed-In`.
-3. Select device 1 and up to eight additional devices; leave unused device fields empty.
-4. Select the household meter and fill only the matching meter section. The meter types below, including three-phase summation, are supported.
-5. Configure SOC limits, power limits, and full-battery behavior.
-6. Before enabling it, disable other automations controlling the same devices, including existing single-device automations.
-
-`Fast load-step correction (optional)` is enabled by default and bases the
-correction on the total household meter deviation. Feedback settle time still
-applies; actual response time also depends on the meter and devices. An explicitly
-saved `off` setting remains unchanged. Diagnostic logging is off by default.
-
-The following sections describe setup of the **single-device blueprint**.
-
-### Overview
-
-This blueprint controls a SunEnergyXT 500 / 500 Pro system with an external
-Home Assistant power meter. The automation adjusts the grid-port power setpoint
-and the max inverter power setpoint to keep the external meter close to the
-configured target. It does not change the device operation mode or discharge
-mode.
-
-### Requirements
-
-- Home Assistant 2024.6 or newer.
-- SunEnergyXT 500 / 500 Pro integration is set up.
-- An external meter is available in Home Assistant.
-- The meter provides live power, not only accumulated energy.
-
-Supported meter types:
-
-| Meter type | Configuration |
-| --- | --- |
-| Shelly Pro 3EM | Select `Shelly Pro 3EM` and select the meter device |
-| EcoTracker | Select `EcoTracker` and select the meter device |
-| BitShake / Tasmota | Select `BitShake / Tasmota` and select the meter device |
-| Shelly 3EM | Select `Shelly 3EM` and select the three phase devices L1 / L2 / L3 |
-| Custom meter | Select `Custom meter`, choose a formula, and provide the matching entities |
-
-### Import the blueprint
-
-Open Home Assistant:
-
-`Settings` -> `Automations & Scenes` -> `Blueprints` -> `Import blueprint`
-
-Use the German default URL:
-
-```text
-https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml
-```
-
-Use the English URL if you want English blueprint labels:
-
-```text
-https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.en.yaml
-```
-
-Local installation is also supported. Copy the YAML file to:
-
-```text
-/config/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.en.yaml
-```
-
-Then reload the blueprint page.
-
-### Create an automation
-
-1. Open `Settings` -> `Automations & Scenes` -> `Blueprints`.
-2. Select `SunEnergyXT 500 Series - Zero Feed-in`.
-3. Click `Create automation`.
-4. Select the `SunEnergyXT device`.
-5. Configure SOC limits, maximum on-grid output power, and AC-coupled maximum charge power.
-6. Select the meter type and fill only the matching meter section.
-7. Save and enable the automation.
-
-### SunEnergyXT settings
-
-| Setting | Description |
-| --- | --- |
-| SunEnergyXT device | The SunEnergyXT 500 / 500 Pro device controlled by this automation |
-| Full-battery behavior | `Follow load after full` or `Follow PV after full` |
-| Maximum on-grid output power | Use 800 W for SunEnergyXT 500 and 2400 W for SunEnergyXT 500 Pro unless a lower local limit is required |
-| System Min Discharge SOC | Written to the device setting and used as the low-SOC threshold |
-| System Max Charge SOC | Written to the device setting and used as the full-battery threshold |
-| AC-coupled maximum charge power | SunEnergyXT 500 and 500 Pro can use up to 2400 W if allowed by the local installation |
-
-### Meter settings
-
-The blueprint shows all meter sections because Home Assistant blueprints cannot
-dynamically hide fields based on the selected meter type. Expand and fill only
-the matching section; leave the others blank.
-
-If the sign direction is wrong, open `Advanced meter sign and unit settings`
-and change the sign convention:
-
-| Observation | Setting |
-| --- | --- |
-| Export/feed-in is shown as positive | `Export/feed-in is positive` |
-| Import/grid consumption is shown as positive | `Import/grid consumption is positive` |
-
-Unit conversion: use multiplier `1` for W and `1000` for kW.
-
-### Behavior and diagnostics
-
-- The default target is `0 W` at the external meter.
-- Positive external meter power means feed-in/export.
-- Negative external meter power means grid import.
-- At full battery, the automation follows the selected full-battery behavior.
-- For `Follow PV after full`, a 1% memory band near the upper SOC limit prevents repeated full-state toggling.
-- If meter, GP, LP, or PV data is temporarily invalid while the full state is confirmed, the blueprint holds PV bypass with `GS = 0 W` and maximum `IS`. It does not force bypass when SOC, GS, or IS is invalid.
-- Diagnostic logging is off by default. In debug mode, decision logs are written at most every 5 seconds.
-
-### First run
-
-- Save the automation disabled first.
-- Confirm that the SunEnergyXT and meter entities are not `unknown` or `unavailable`.
-- Enable the automation and verify that the external meter moves toward `0 W`.
-- If the direction is wrong, adjust the meter sign convention.
-- If control is slow, check the external meter update rate and the advanced control intervals.
+- Prüfen, dass die benötigten Geräte- und Zählerentitäten nicht `unknown` oder `unavailable` sind.
+- Pro Gerät nur eine regelnde Automatisierung aktivieren, damit keine widersprüchlichen Leistungsbefehle entstehen.
+- Standardziel ist `0 W` am externen Zähler. Nach dem Aktivieren prüfen, ob sich der Zähler dem Ziel nähert; der gewählte PV-Folgemodus kann bei voller Batterie Einspeisung zulassen.
+- Bei falscher Regelrichtung die Vorzeicheneinstellung prüfen.
+- Bei langsamer Reaktion die Aktualisierungsrate des Zählers, die Rückmeldewartezeit und die Regelintervalle prüfen. Ein kurzes Schreibintervall allein garantiert keine entsprechend schnelle Reaktion.
+- Diagnoseprotokolle sind standardmäßig aus. Nur bei Bedarf aktivieren.
