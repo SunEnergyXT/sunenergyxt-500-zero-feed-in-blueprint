@@ -1,23 +1,58 @@
-# SunEnergyXT 500 Series Zero Feed-in Blueprint
+# SunEnergyXT 500 Series Zero Feed-in Blueprints
 
 **Language / Sprache:** [Deutsch](#deutsch) | [English](#english)
 
 **Default blueprint:** Deutsch  
 **Optional blueprint:** English
 
-Home Assistant blueprint for SunEnergyXT 500 / 500 Pro systems with an external
-power meter. Home Assistant can import the blueprint from the raw URLs below.
+Home Assistant blueprints for SunEnergyXT 500 / 500 Pro systems with an external
+power meter. Choose the single-device blueprint for one device, or the multi-space
+blueprint to coordinate up to nine devices behind one household meter.
+Home Assistant can import either blueprint from the raw URLs below.
 
 ## Blueprint URLs
+
+### Single Device / Einzelgerät
 
 | Language | Home Assistant import URL |
 | --- | --- |
 | Deutsch | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.yaml` |
 | English | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-zero-feed-in.en.yaml` |
 
+### Multi-Space / Mehrere Geräte
+
+| Language | Home Assistant import URL |
+| --- | --- |
+| Deutsch | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-multi-zero-feed-in.yaml` |
+| English | `https://raw.githubusercontent.com/SunEnergyXT/sunenergyxt-500-zero-feed-in-blueprint/main/blueprints/automation/sunenergyxt/sunenergyxt-500-multi-zero-feed-in.en.yaml` |
+
 ## Deutsch
 
 [English](#english)
+
+### Multi-Space: mehrere Geräte, ein Zähler
+
+Der Multi-Space-Blueprint koordiniert bis zu **neun SunEnergyXT 500 / 500 Pro**
+an einem Haushaltszähler. Die Netzanschlüsse der Geräte müssen unabhängig
+voneinander hinter diesem Zähler angeschlossen sein, nicht am Lastausgang eines
+anderen gesteuerten Geräts. Eine Automatisierung regelt die gesamte Gerätegruppe.
+Gerätemodelle werden über die Integration erkannt; eine manuelle Modellwahl ist
+nicht erforderlich.
+
+1. Unter `Blueprint importieren` die deutsche Multi-Space-URL aus der Tabelle oben einfügen.
+2. Aus `SunEnergyXT 500 Serie - Multi-Space-Nulleinspeisung` eine Automatisierung erstellen.
+3. Gerät 1 und bis zu acht weitere Geräte auswählen; ungenutzte Gerätefelder leer lassen.
+4. Den Haushaltszähler auswählen und nur das passende Zählerformular ausfüllen. Die unten beschriebenen Zählertypen einschließlich Dreiphasensumme werden unterstützt.
+5. SOC-Grenzen, Leistungsgrenzen und das Verhalten bei voller Batterie einstellen.
+6. Vor dem Aktivieren andere Automatisierungen deaktivieren, die dieselben Geräte regeln, einschließlich bisheriger Einzelgeräte-Automatisierungen.
+
+`Schneller Lastsprungausgleich (optional)` ist standardmäßig eingeschaltet und
+richtet die Korrektur nach der gesamten Leistungsabweichung am Haushaltszähler.
+Die Wartezeit für Rückmeldungen gilt weiterhin; die tatsächliche Reaktionszeit
+hängt auch von Zähler und Geräten ab. Eine bereits ausdrücklich gespeicherte
+Einstellung `aus` bleibt erhalten. Diagnoseprotokolle sind standardmäßig aus.
+
+Die folgenden Abschnitte beschreiben die Einrichtung des **Einzelgeräte-Blueprints**.
 
 ### Überblick
 
@@ -130,6 +165,28 @@ Zähler in kW liefert, Multiplikator `1000` verwenden.
 ## English
 
 [Deutsch](#deutsch)
+
+### Multi-space: multiple devices, one meter
+
+The multi-space blueprint coordinates up to **nine SunEnergyXT 500 / 500 Pro
+devices** using one household meter. Each device's grid port must connect
+independently behind that meter, not to another controlled device's load port.
+One automation controls the whole group. Device models are detected through
+the integration; manual model selection is not required.
+
+1. In `Import blueprint`, paste the English multi-space URL from the table above.
+2. Create an automation from `SunEnergyXT 500 Series - Multi-Space Zero Feed-In`.
+3. Select device 1 and up to eight additional devices; leave unused device fields empty.
+4. Select the household meter and fill only the matching meter section. The meter types below, including three-phase summation, are supported.
+5. Configure SOC limits, power limits, and full-battery behavior.
+6. Before enabling it, disable other automations controlling the same devices, including existing single-device automations.
+
+`Fast load-step correction (optional)` is enabled by default and bases the
+correction on the total household meter deviation. Feedback settle time still
+applies; actual response time also depends on the meter and devices. An explicitly
+saved `off` setting remains unchanged. Diagnostic logging is off by default.
+
+The following sections describe setup of the **single-device blueprint**.
 
 ### Overview
 
